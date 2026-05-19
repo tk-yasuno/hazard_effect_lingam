@@ -1,0 +1,126 @@
+# LiNGAM因果探索MVP設定ファイル
+
+# データパス
+data:
+  input_dir: "data/processed"
+  output_dir: "output"
+  labeled_time_series: "data/processed/labeled_time_series.csv"
+  selected_equipment: "data/processed/selected_64_equipment.json"
+  pump_master: "data/processed/pump_master.csv"
+
+# 特徴量エンジニアリング設定
+feature_engineering:
+  lookback_days: 90  # 時間窓サイズ（日数）
+  min_data_points: 3  # 最低必要データ点数
+  rolling_windows: [7, 14, 30]  # ローリング統計量の窓サイズ（日）
+  fill_missing: 0.0  # 不足時の埋め値
+
+# 前処理設定
+preprocessing:
+  outlier_threshold: 3.0  # 外れ値の標準偏差閾値（±3σ）
+  interpolation_method: "linear"  # 補間方法（linear, ffill, bfill）
+  max_missing_ratio: 0.3  # 最大欠損率（これを超えるセンサーは除外）
+
+# スケーリングと特徴選択
+scaling:
+  method: "standard"  # standard, minmax, robust
+  correlation_threshold: 0.95  # 相関の高いペアを除外する閾値
+  vif_threshold: 10.0  # VIF閾値（多重共線性除外）
+  variance_threshold: 0.01  # 分散閾値（ほぼ定数の特徴量を除外）
+
+# LiNGAM設定
+lingam:
+  algorithm: "DirectLiNGAM"  # DirectLiNGAM, ICALiNGAM
+  random_state: 42
+  max_iter: 1000
+
+# 非線形因果探索設定（v0.2.0）
+nonlinear_causal:
+  enabled: true  # 非線形因果探索を実行するか
+  method: "NonlinearLiNGAM"  # NonlinearLiNGAM, ANM, HSIC
+  subset_size: 100000  # サブセットサイズ（86741を超える値で全サンプル使用）
+  random_state: 42
+  # Positive群のみ実行（微小効果を非線形で捉える）
+  target_groups: ["positive"]  # 実行対象グループ
+  
+# ブートストラップ検証設定
+bootstrap:
+  n_sampling: 100  # サンプリング回数
+  sample_ratio: 0.8  # サブサンプリング比率
+  stability_threshold: 0.7  # エッジ出現頻度の閾値（70%以上を採用）
+
+# KPI設定
+kpi:
+  target_labels: ["label_future_30d", "label_future_60d", "label_future_90d"]
+  primary_label: "u_i_target"  # v0.1.2: ランダム効果u_iをKPIとして使用
+  # グループ別分析設定 (v0.2.0: 符号ベース2グループ)
+  u_group_analysis:
+    enabled: true
+    groups: ["positive", "negative"]  # u_i > 0 (positive), u_i <= 0 (negative)
+    compare_mode: true
+
+# データ不均衡補正設定（v0.2.0: SMOTE無効化）
+imbalance_correction:
+  enabled: false  # SMOTE拡張を無効化（符号ベース2グループで不要）
+  min_ratio_threshold: 10.0  # 10倍以上の差がある場合に補正
+  target_strategy: "mean"  # "mean": 他グループの平均、"max": 最大グループに合わせる
+  smote_k_neighbors: 5  # SMOTE のk近傍数
+  random_state: 42
+  save_augmented: true  # 拡張後データを保存
+
+# ハザードモデル設定（v0.2.0で更新）
+hazard_model:
+  # データ設定
+  n_states: 8  # 健全度状態数（8分割）
+  min_data_points: 30  # 最低データ点数
+  min_delta_t: 1  # 最小点検間隔（日）
+  max_delta_t: 365  # 最大点検間隔（日）
+  
+  # NUTS推定パラメータ
+  n_draws: 2000
+  n_tune: 1000
+  n_chains: 8
+  n_cores: 8
+  target_accept: 0.95
+  random_seed: 42
+  
+  # GPU設定（v0.2.0: JAX/NumPyroによる高速化）
+  use_gpu: true  # GPU使用フラグ（true: NumPyroサンプラー、false: 標準PyMC）
+  jax_platform: "gpu"  # JAXプラットフォーム: "cpu", "gpu", "tpu"
+  
+  # グループ分け設定（v0.2.0: 符号ベース、パーセンタイル不要）
+  # positive: u_i > 0, negative: u_i <= 0
+  
+  # 実行モード
+  skip_nuts: false  # true: ADVI高速近似使用（開発時）、false: NUTS正確推定（論文用）
+
+# 可視化設定
+visualization:
+  figure_size: [12, 10]
+  dpi: 300
+  edge_width_scale: 3.0  # エッジ重みの表示スケール
+  node_size_scale: 500
+  layout: "spring"  # spring, circular, kamada_kawai
+
+# その他
+misc:
+  n_jobs: 16  # 並列処理のコア数(-1で全コア使用、16で16コア使用)
+  verbose: 1  # ログレベル(0: なし、1: 標準、2: 詳細)
+
+# 高度な因果探索手法設定（v0.2.0で追加）
+advanced_methods:
+  enabled: false  # 高度な手法を使用するか（デフォルトはDirectLiNGAM）
+  method: "DirectLiNGAM"  # "DirectLiNGAM", "NonlinearLiNGAM", "BayesianMixture"
+  
+  # 非線形因果探索設定
+  nonlinear:
+    subset_size: 1000  # サブセットサイズ（計算コスト削減）
+    method: "NonlinearLiNGAM"  # "NonlinearLiNGAM", "ANM", "HSIC"
+  
+  # ベイズ混合モデル設定
+  bayesian:
+    n_draws: 1000  # NUTSドロー数
+    n_tune: 500  # チューニング期間
+    n_chains: 4  # チェイン数
+    target_accept: 0.90  # 受容率目標
+    use_student_t: true  # Student-t分布を使用（外れ値対応）
